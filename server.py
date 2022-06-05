@@ -1,10 +1,12 @@
+from crypt import methods
 import socket
 import threading
 
-def main():
-    HOST = 'localhost'
-    PORT = 8080
+HOST = 'localhost'
+PORT = 8080
+METHODS = ['GET']
 
+def main():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     s.bind((HOST, PORT))
@@ -27,7 +29,12 @@ def main():
 def handleRequest(client, address):
     message = client.recv(1024).decode('ascii')
     print(message)
-    decodeHTTP(message)
+    method, path = decodeHTTP(message)
+
+    if method == 'GET':
+        response = handleGetRequest(path)
+        client.send(response.encode('ascii'))
+
     client.close()
 
 
@@ -41,6 +48,14 @@ def decodeHTTP(message):
 
     checkHttpVersion(requestLine)
 
+    path = requestLine[1]
+    method = requestLine[0]
+
+    if method not in METHODS:
+        raise Exception('bad request')
+
+    return (method, path)
+
 
 def checkHttpVersion(requestLine):
 
@@ -48,13 +63,22 @@ def checkHttpVersion(requestLine):
 
     if httpVersion != 'HTTP/1.1':
         raise Exception('http version not supported')
-
-    print('correct version of http')
         
+
+def handleGetRequest(path):
+    fullPath = './static' + path
+    
+    print(fullPath)
+
+    f = open(fullPath, 'r')
+    fileContent = f.read()
+    f.close()
+    return buildResponse(200, 'OK', fileContent)
+
 
 
 def buildResponse(status, statusMessage, message=None):
-    message = f'HTTP/1.1 {status} {statusMessage}r\n' \
+    message = f'HTTP/1.1 {status} {statusMessage}\r\n' \
                'Server: Lucas\r\n' \
                '\r\n' \
               f'{message}\n'

@@ -10,8 +10,12 @@ s.connect((HOST, PORT))
 
 print('Connected')
 
-message = 'GET / HTTP/1.1\r\n'
+message = 'GET /index.html HTTP/1.1\r\n'
 
 s.send(message.encode('ascii'))
+
+response = s.recv(1024).decode('ascii')
+
+print(response)
 
 s.close()
