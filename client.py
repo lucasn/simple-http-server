@@ -1,6 +1,7 @@
 import socket 
 import sys
 from time import sleep
+from server import Request
 
 HOST = 'localhost'
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
@@ -11,7 +12,16 @@ s.connect((HOST, PORT))
 
 print('Connected')
 
-message = 'GET / HTTP/1.1\r\n\r\n'
+request = Request(
+    path='/',
+    method='POST'
+)
+
+request.build()
+
+message = request.request
+
+print(message)
 
 s.send(message.encode('ascii'))
 

@@ -1,4 +1,3 @@
-from operator import rshift
 import socket
 import threading
 import sys
@@ -55,49 +54,23 @@ def connectionTimeoutCounter(client, timeout, connectionStatus):
 
 def handleRequest(client, address, message):
     try:
-        method, path, headers, body = decodeHTTP(message)
+        request = Request(message)
 
-        if method == 'GET':
-            response = handleGetRequest(path)
+        print(request.path)
+        print(request.method)
+        print(request.headers)
+        print(request.body)
+
+        if request.method == 'GET':
+            response = handleGetRequest(request.path)
             client.send(response.encode('ascii'))
-        elif method == 'POST':
-            response = handlePostRequest(path, body)
+        elif request.method == 'POST':
+            response = handlePostRequest(request.path, request.body)
             client.send(response.encode('ascii'))
     except ServerException as ex:
         response = buildResponse(ex.status, ex.statusMessage, ex.message)
         client.send(response.encode('ascii'))
 
-
-def decodeHTTP(message):
-    request = message.split('\r\n', 1)
-
-    requestLine = request[0].split(' ')
-
-    if len(requestLine) != 3:
-        raise ServerException(400, 'Bad Request')
-
-    checkHttpVersion(requestLine)
-
-    path = requestLine[1]
-    method = requestLine[0]
-
-    if method not in METHODS:
-        raise ServerException(400, 'Bad Request', 'Method not available')
-
-    restOfRequestMessage = request[1]
-
-    actualLine, restOfRequestMessage = restOfRequestMessage.split('\r\n', 1)
-
-    headers = []
-    while actualLine != '':
-        headers.append(actualLine)
-        restOfRequestMessage = restOfRequestMessage.split('\r\n', 1)
-        actualLine = restOfRequestMessage[0]
-        restOfRequestMessage = restOfRequestMessage[1] if len(restOfRequestMessage) > 1 else None
-
-    body = restOfRequestMessage
-
-    return (method, path, headers, body)
 
 
 def checkHttpVersion(requestLine):
@@ -161,6 +134,83 @@ def checkForPersistentConnection(message):
                 if field.find('timeout') != -1:
                     return int(field.split('=')[1])
     return None
+
+
+class Request:
+    def __init__(self, rawRequest: str = None, path=None, method=None, headers=[], body=None):
+        self.rawRequest = rawRequest
+        self.path = path
+        self.method = method
+        self.headers = headers
+        self.body = body
+        if rawRequest != None:
+            self.decode()
+        else:
+            self.build()
+
+    def decode(self):
+        request = self.rawRequest.split('\r\n', 1)
+        requestLine = request[0].split(' ')
+
+        if len(requestLine) != 3:
+            raise ServerException(400, 'Bad Request')
+
+        self.checkHttpVersion(requestLine)
+
+        self.path = requestLine[1]
+        self.method = requestLine[0]
+
+        self.checkMethod()
+
+        restOfRequestMessage = request[1]
+
+        self.splitHeadersAndBody(restOfRequestMessage)
+
+
+    def build(self):
+        if self.path == None:
+            raise Exception('Failed to build request: path is None')
+        if self.method == None:
+            raise Exception('Failed to build request: method is None')
+        
+        self.request = f'{self.method} {self.path} HTTP/1.1\r\n'
+
+        for header in self.headers:
+            self.request += f'{header}\r\n'
+
+        # add empty line to separate headers from body
+        # this come from HTTP/1.1 specification
+        self.request += '\r\n'
+
+        if self.body != None:
+            self.request += self.body + '\r\n'
+
+        return self.request
+
+
+    def checkHttpVersion(self, requestLine):
+        httpVersion = requestLine[2]
+        if httpVersion != 'HTTP/1.1':
+            raise ServerException(505, 'HTTP Version Not Supported')
+
+
+    def checkMethod(self):
+        if self.method not in METHODS:
+            raise ServerException(400, 'Bad Request', 'Method not available')
+
+
+    def splitHeadersAndBody(self, headersAndBody):
+        if len(headersAndBody) > 0:
+            actualLine, headersAndBody = headersAndBody.split('\r\n', 1)
+
+            while actualLine != '':
+                self.headers.append(actualLine)
+                headersAndBody = headersAndBody.split('\r\n', 1)
+                actualLine = headersAndBody[0]
+                headersAndBody = headersAndBody[1] if len(headersAndBody) > 1 else None
+
+            self.body = headersAndBody
+
 
 
 class ServerException(Exception):
