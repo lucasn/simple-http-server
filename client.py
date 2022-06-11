@@ -14,12 +14,11 @@ print('Connected')
 
 request = Request(
     path='/',
-    method='GET'
+    method='GET',
+    headers=['Keep-Alive: timeout=1']
 )
 
 message =request.build()
-
-print(message)
 
 s.send(message.encode('ascii'))
 
@@ -27,22 +26,32 @@ response = s.recv(1024).decode('ascii')
 
 print(response)
 
-# sleep(2)
+sleep(1)
 
-# print('again')
-# sleep(1)
+message = Request(
+    path='/',
+    method='GET'
+).build()
 
-# message = Request(
-#     path='/',
-#     method='POST'
-# ).build()
 
-# print(message)
+s.send(message.encode('ascii'))
 
-# s.send(message.encode('ascii'))
+response = s.recv(1024).decode('ascii')
 
-# response = s.recv(1024).decode('ascii')
+print(response)
 
-# print('Receive Reponse')
+sleep(1)
 
-# sleep(5)
+message = Request(
+    path='/',
+    method='GET'
+).build()
+
+
+s.send(message.encode('ascii'))
+
+response = s.recv(1024).decode('ascii')
+
+print(response)
+
+sleep(10)

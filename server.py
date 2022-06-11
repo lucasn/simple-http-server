@@ -1,7 +1,9 @@
+from copy import deepcopy
 import socket
 import threading
 from time import sleep
 from signal import signal, SIGINT
+import multiprocessing
 
 from models import Request, Response
 from exceptions import ServerException
@@ -60,9 +62,9 @@ class Server:
         else:
             # Using connectionStatus as list because boolean are passed by value in python
             connectionStatus = [True]
+            counter = [0]
             mutex = threading.Lock()
-            tr = threading.Thread(target=self.connectionTimeoutCounter, args=(client, timeout, connectionStatus, mutex))
-            tr.daemon = True
+            tr = threading.Thread(target=self.connectionTimeoutCounter, args=(client, timeout, connectionStatus, mutex, counter))
             tr.start()
             while connectionStatus[0]:
                 response = self.handleRequest(client, message)
@@ -70,7 +72,9 @@ class Server:
                     if connectionStatus[0]:
                         client.send(response.encode('ascii'))
                 message = client.recv(1024).decode('ascii')
-        
+                with mutex:
+                    counter[0] = 0
+
 
     def handleRequest(self, client, message):
         try:
@@ -86,8 +90,15 @@ class Server:
             return Response(status=404, statusMessage='Not Found').build()
 
 
-    def connectionTimeoutCounter(self, client, timeout, connectionStatus, mutex):
-        sleep(timeout)
+    def connectionTimeoutCounter(self, client, timeout, connectionStatus, mutex, counter):
+        while True:
+            sleep(1)
+            with mutex:
+                if counter[0] < timeout:
+                    counter[0] = counter[0] + 1
+                else:
+                    break
+
         clientHost, clientPort = client.getpeername()
         with mutex:
             connectionStatus[0] = False
