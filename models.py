@@ -83,7 +83,7 @@ class Response:
 
     defaultHeaders = ['Server: My Server']
 
-    def __init__(self, status=None, statusMessage=None, message=None, headers=defaultHeaders):
+    def __init__(self, status=200, statusMessage='OK', message=None, headers=defaultHeaders):
         self.status = status
         self.statusMessage = statusMessage
         self.message = message

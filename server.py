@@ -1,28 +1,35 @@
 import socket
 import threading
 from time import sleep
+from signal import signal, SIGINT
 
 from models import Request, Response
 from exceptions import ServerException
 from configs import HOST, PORT
 
+
+
 class Server:
-    def __init__(self, host=HOST, port=PORT):
+    def __init__(self, urls={}, host=HOST, port=PORT):
         self.host = host
         self.port = port
+        self.urls = urls
+        self.socket = None
+
+        signal(SIGINT, self._shutdown)
 
 
     def start(self):
         print('Starting server...')
         
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self.host, self.port))
-        s.listen()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((self.host, self.port))
+        self.socket.listen()
 
         print(f'Listenning on port {self.port}')
 
         while True:
-            client, address = s.accept()
+            client, address = self.socket.accept()
 
             clientHost, clientPort = client.getpeername()
 
@@ -33,12 +40,20 @@ class Server:
             tr.start()
 
 
+    def _shutdown(self, sig, frame):
+        print('Shutting down...')
+        self.socket.close()
+        quit()
+
+
     def handleConnection(self, client):
         message = client.recv(1024).decode('ascii')
+        # TODO: add support for max requests
         timeout = self.checkForPersistentConnection(message)
 
         if timeout == None:
-            self.handleRequest(client, message)
+            response = self.handleRequest(client, message)
+            client.send(response.encode('ascii'))
             clientHost, clientPort = client.getpeername()
             client.close()
             print(f'connection closed: {clientHost}:{clientPort}')
@@ -61,48 +76,14 @@ class Server:
         try:
             request = Request(message)
 
-            if request.method == 'GET':
-                response = self.handleGetRequest(request.path)
-
-            elif request.method == 'POST':
-                response = self.handlePostRequest(request.path, request.body)
-
-            return response
+            handler = self.urls[(request.path, request.method)]
+            return handler(request)
 
         except ServerException as ex:
             return Response(ex.status, ex.statusMessage, ex.message).build()
 
-
-    def handleGetRequest(self, path):
-        if path == '/':
-            path = '/index.html'
-
-        fullPath = './static' + path
-
-        try:
-            f = open(fullPath, 'r')
-            fileContent = f.read()
-            f.close()
-            return Response(status=200, statusMessage='OK', message=fileContent).build()
-        except:
-            raise ServerException(404, 'Not Found')
-
-
-    def handlePostRequest(self, path, body):
-        if path == '/':
-            path = '/index.html'
-
-        fullPath = './static' + path
-
-        try:
-            f = open(fullPath, 'r')
-            fileContent = f.read()
-            f.close()
-            fileContent = fileContent.split('<body>')
-            responseMessage = fileContent[0] + '<body>\n' + body + fileContent[1]
-            return Response(status=200, statusMessage='OK', message=responseMessage).build()
-        except:
-            raise ServerException(404, 'Not Found')
+        except KeyError:
+            return Response(status=404, statusMessage='Not Found').build()
 
 
     def connectionTimeoutCounter(self, client, timeout, connectionStatus, mutex):
