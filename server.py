@@ -43,15 +43,17 @@ class Server:
             client.close()
             print(f'connection closed: {clientHost}:{clientPort}')
         else:
-            # TODO: improve this strategy using semaphores
-            # Using the shared variable connection status may cause race conditions
             # Using connectionStatus as list because boolean are passed by value in python
             connectionStatus = [True]
-            tr = threading.Thread(target=self.connectionTimeoutCounter, args=(client, timeout, connectionStatus))
+            mutex = threading.Lock()
+            tr = threading.Thread(target=self.connectionTimeoutCounter, args=(client, timeout, connectionStatus, mutex))
             tr.daemon = True
             tr.start()
             while connectionStatus[0]:
-                self.handleRequest(client, message)
+                response = self.handleRequest(client, message)
+                with mutex:
+                    if connectionStatus[0]:
+                        client.send(response.encode('ascii'))
                 message = client.recv(1024).decode('ascii')
         
 
@@ -61,15 +63,14 @@ class Server:
 
             if request.method == 'GET':
                 response = self.handleGetRequest(request.path)
-                client.send(response.encode('ascii'))
 
             elif request.method == 'POST':
                 response = self.handlePostRequest(request.path, request.body)
-                client.send(response.encode('ascii'))
+
+            return response
 
         except ServerException as ex:
-            response = Response(ex.status, ex.statusMessage, ex.message).build()
-            client.send(response.encode('ascii'))
+            return Response(ex.status, ex.statusMessage, ex.message).build()
 
 
     def handleGetRequest(self, path):
@@ -104,11 +105,12 @@ class Server:
             raise ServerException(404, 'Not Found')
 
 
-    def connectionTimeoutCounter(self, client, timeout, connectionStatus):
+    def connectionTimeoutCounter(self, client, timeout, connectionStatus, mutex):
         sleep(timeout)
         clientHost, clientPort = client.getpeername()
-        connectionStatus[0] = False
-        client.close()
+        with mutex:
+            connectionStatus[0] = False
+            client.close()
         print(f'connection closed: {clientHost}:{clientPort}')
         
 

@@ -15,7 +15,7 @@ print('Connected')
 request = Request(
     path='/',
     method='POST',
-    headers=['Keep-Alive: timeout=10']
+    headers=['Keep-Alive: timeout=5']
 )
 
 message =request.build()
@@ -26,7 +26,7 @@ s.send(message.encode('ascii'))
 
 response = s.recv(1024).decode('ascii')
 
-print(response)
+print('Receive Response')
 
 sleep(2)
 
@@ -38,10 +38,12 @@ message = Request(
     method='POST'
 ).build()
 
+print(message)
+
 s.send(message.encode('ascii'))
 
 response = s.recv(1024).decode('ascii')
 
-print(response)
+print('Receive Reponse')
 
-sleep(7)
+sleep(5)
