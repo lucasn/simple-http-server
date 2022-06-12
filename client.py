@@ -12,46 +12,27 @@ s.connect((HOST, PORT))
 
 print('Connected')
 
-request = Request(
-    path='/',
-    method='GET',
-    headers=['Keep-Alive: timeout=1']
-)
+for i in range(3):
+    if i == 0:
+        request = Request(
+            path='/',
+            method='GET',
+            headers=['Connection: Keep-Alive']
+        )
+    else:
+        request = Request(
+            path='/',
+            method='POST'
+        )
 
-message =request.build()
+    message =request.build()
 
-s.send(message.encode('ascii'))
+    s.send(message.encode('ascii'))
 
-response = s.recv(1024).decode('ascii')
+    response = s.recv(1024).decode('ascii')
 
-print(response)
+    print(response)
 
-sleep(1)
+    sleep(1)
 
-message = Request(
-    path='/',
-    method='GET'
-).build()
-
-
-s.send(message.encode('ascii'))
-
-response = s.recv(1024).decode('ascii')
-
-print(response)
-
-sleep(1)
-
-message = Request(
-    path='/',
-    method='GET'
-).build()
-
-
-s.send(message.encode('ascii'))
-
-response = s.recv(1024).decode('ascii')
-
-print(response)
-
-sleep(10)
+sleep(5)

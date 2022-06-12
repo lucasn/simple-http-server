@@ -83,12 +83,17 @@ class Response:
 
     defaultHeaders = ['Server: My Server']
 
-    def __init__(self, status=200, statusMessage='OK', message=None, headers=defaultHeaders):
+    def __init__(self, status=200, statusMessage='OK', message=None, headers=[]):
         self.status = status
         self.statusMessage = statusMessage
         self.message = message
-        self.headers = headers
         self.response = None
+        self.headers = []
+
+        for header in Response.defaultHeaders:
+            self.headers.append(header)
+        
+        self.headers += headers
 
     def build(self):
         if self.status == None:
@@ -97,6 +102,7 @@ class Response:
         if self.statusMessage == None:
             raise Exception('Failed to build response: status message is None')
 
+        self.headers.append(f'Content-Length: {len(self.message) if self.message != None else 0}')
 
         self.response = f'HTTP/1.1 {self.status} {self.statusMessage}\r\n'
     

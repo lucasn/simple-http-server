@@ -50,14 +50,21 @@ class Server:
 
     def handleConnection(self, client):
         message = client.recv(1024).decode('ascii')
-        # TODO: add support for max requests
-        timeout = self.checkForPersistentConnection(message)
+        connectionType = self.checkForConnectionType(message)
 
-        if timeout == None:
+        if connectionType != 'close':
+            timeout = self.checkForTimeoutAndMaxRequests(message)
+            if timeout == None:
+                timeout = 5
+        else:
+            timeout = 5
+
+        if connectionType == 'close':
             response = self.handleRequest(client, message)
-            client.send(response.encode('ascii'))
+            response.headers.append('Connection: close')
+            client.send(response.build().encode('ascii'))
             clientHost, clientPort = client.getpeername()
-            client.close()
+            self.closeConnectionGracefully(client)
             print(f'connection closed: {clientHost}:{clientPort}')
         else:
             # Using connectionStatus as list because boolean are passed by value in python
@@ -68,9 +75,10 @@ class Server:
             tr.start()
             while connectionStatus[0]:
                 response = self.handleRequest(client, message)
+                response.headers.append('Connection: keep-alive')
                 with mutex:
                     if connectionStatus[0]:
-                        client.send(response.encode('ascii'))
+                        client.send(response.build().encode('ascii'))
                 message = client.recv(1024).decode('ascii')
                 with mutex:
                     counter[0] = 0
@@ -78,16 +86,17 @@ class Server:
 
     def handleRequest(self, client, message):
         try:
+            print(message)
             request = Request(message)
 
             handler = self.urls[(request.path, request.method)]
             return handler(request)
 
         except ServerException as ex:
-            return Response(ex.status, ex.statusMessage, ex.message).build()
+            return Response(ex.status, ex.statusMessage, ex.message)
 
         except KeyError:
-            return Response(status=404, statusMessage='Not Found').build()
+            return Response(status=404, statusMessage='Not Found')
 
 
     def connectionTimeoutCounter(self, client, timeout, connectionStatus, mutex, counter):
@@ -102,12 +111,17 @@ class Server:
         clientHost, clientPort = client.getpeername()
         with mutex:
             connectionStatus[0] = False
-            client.close()
+            self.closeConnectionGracefully(client)
+            
         print(f'connection closed: {clientHost}:{clientPort}')
-        
 
 
-    def checkForPersistentConnection(self, message):
+    def closeConnectionGracefully(self, client):
+        client.shutdown(socket.SHUT_RDWR)
+        client.close()
+
+
+    def checkForTimeoutAndMaxRequests(self, message):
         lines = message.split('\r\n')
         for line in lines:
             # TODO: treat cases where the keep-alives fields are wrong
@@ -117,4 +131,12 @@ class Server:
                 for field in fields:
                     if field.find('timeout') != -1:
                         return int(field.split('=')[1])
+        return None
+
+    def checkForConnectionType(self, message):
+        lines = message.split('\r\n')
+        for line in lines:
+            if line.find('Connection') != -1:
+                value = line.split(':')[1].strip()
+                return value
         return None
